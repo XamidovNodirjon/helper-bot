@@ -1,0 +1,86 @@
+[
+  {
+    "type": "checkboxes",
+    "label": "Тип недвижимости",
+    "unit": null,
+    "scope": null,
+    "values": [
+      {
+        "label": "Магазины/бутики",
+        "value": "1",
+        "icon": null
+      },
+      {
+        "label": "Салоны",
+        "value": "2",
+        "icon": null
+      },
+      {
+        "label": "Рестораны/кафе/бары",
+        "value": "3",
+        "icon": null
+      },
+      {
+        "label": "Офисы",
+        "value": "4",
+        "icon": null
+      },
+      {
+        "label": "Склады",
+        "value": "5",
+        "icon": null
+      },
+      {
+        "label": "Отдельно стоящие здания",
+        "value": "6",
+        "icon": null
+      },
+      {
+        "label": "Базы отдыха",
+        "value": "7",
+        "icon": null
+      },
+      {
+        "label": "Помещения промышленного назначения",
+        "value": "8",
+        "icon": null
+      },
+      {
+        "label": "Помещения свободного назначения",
+        "value": "9",
+        "icon": null
+      },
+      {
+        "label": "МАФ (малая архитектурная форма)",
+        "value": "10",
+        "icon": null
+      },
+      {
+        "label": "Часть здания",
+        "value": "11",
+        "icon": null
+      },
+      {
+        "label": "Другое",
+        "value": "12",
+        "icon": null
+      }
+    ],
+    "options": [
+      {
+        "categories": [
+          11,
+          14,
+          1523
+        ],
+        "order": 1,
+        "orderForSearch": 1,
+        "ranges": [],
+        "constraints": {
+          "type": "string"
+        },
+        "fakeCategory": false
+      }
+    ]
+  }
+]
