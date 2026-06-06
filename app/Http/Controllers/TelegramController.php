@@ -13,6 +13,8 @@ use Telegram\Bot\Laravel\Facades\Telegram;
 
 class TelegramController extends Controller
 {
+    protected $callbackMessageId = null;
+
     public function handle(Request $request)
     {
         $update = $request->all();
@@ -69,11 +71,15 @@ class TelegramController extends Controller
 
         if (strpos($text, '/start') === 0) {
             $this->cleanOldMessages($user->telegram_id);
+            $this->removeOldFilterKeyboard($user->telegram_id);
             $user->resetFilters();
             $user->update(['step' => 'select_language']);
             $this->sendStep($user);
             return;
         }
+
+        // Remove the inline keyboard from the previous bot message to prevent clicking it again
+        $this->removeOldFilterKeyboard($user->telegram_id);
 
         switch ($user->step) {
             case 'save_profile_name':
@@ -197,6 +203,7 @@ class TelegramController extends Controller
 
         $callbackQueryId = $callbackQuery['id'];
         $chatId = $user->telegram_id;
+        $this->callbackMessageId = $callbackQuery['message']['message_id'] ?? null;
 
         try {
             Telegram::answerCallbackQuery(['callback_query_id' => $callbackQueryId]);
@@ -902,7 +909,22 @@ class TelegramController extends Controller
                 break;
 
             case 'showing_results':
-                $this->sendMessage($chatId, TranslationService::trans('scraping_loading', $user->language));
+                if ($this->callbackMessageId) {
+                    try {
+                        Telegram::editMessageText([
+                            'chat_id' => $chatId,
+                            'message_id' => $this->callbackMessageId,
+                            'text' => TranslationService::trans('scraping_loading', $user->language),
+                            'reply_markup' => json_encode(['inline_keyboard' => []]),
+                            'parse_mode' => 'HTML'
+                        ]);
+                        Cache::put('tg_filter_msg_' . $chatId, $this->callbackMessageId, 3600);
+                    } catch (\Exception $e) {
+                        $this->sendMessage($chatId, TranslationService::trans('scraping_loading', $user->language));
+                    }
+                } else {
+                    $this->sendMessage($chatId, TranslationService::trans('scraping_loading', $user->language));
+                }
                 $this->runScraperAndShow($user);
                 break;
 
@@ -937,7 +959,22 @@ class TelegramController extends Controller
                 break;
 
             case 'showing_results':
-                $this->sendMessage($chatId, TranslationService::trans('scraping_loading', $user->language));
+                if ($this->callbackMessageId) {
+                    try {
+                        Telegram::editMessageText([
+                            'chat_id' => $chatId,
+                            'message_id' => $this->callbackMessageId,
+                            'text' => TranslationService::trans('scraping_loading', $user->language),
+                            'reply_markup' => json_encode(['inline_keyboard' => []]),
+                            'parse_mode' => 'HTML'
+                        ]);
+                        Cache::put('tg_filter_msg_' . $chatId, $this->callbackMessageId, 3600);
+                    } catch (\Exception $e) {
+                        $this->sendMessage($chatId, TranslationService::trans('scraping_loading', $user->language));
+                    }
+                } else {
+                    $this->sendMessage($chatId, TranslationService::trans('scraping_loading', $user->language));
+                }
                 $this->runScraperAndShow($user);
                 break;
         }
@@ -1004,6 +1041,7 @@ class TelegramController extends Controller
         $output = shell_exec($cmd);
         
         if (!$output) {
+            $this->removeOldFilterMessage($chatId);
             $this->sendMessage($chatId, TranslationService::trans('scrape_error', $user->language));
             $user->resetFilters();
             $this->sendStep($user);
@@ -1013,6 +1051,7 @@ class TelegramController extends Controller
         $response = json_decode($output, true);
         if (isset($response['error'])) {
             Log::error("Scraper Error Output: " . $response['error']);
+            $this->removeOldFilterMessage($chatId);
             $this->sendMessage($chatId, TranslationService::trans('scrape_error', $user->language));
             $user->resetFilters();
             $this->sendStep($user);
@@ -1021,6 +1060,7 @@ class TelegramController extends Controller
 
         $listings = $response['listings'] ?? [];
         if (empty($listings)) {
+            $this->removeOldFilterMessage($chatId);
             $this->sendMessage($chatId, TranslationService::trans('results_empty', $user->language));
             $user->resetFilters();
             $this->sendStep($user);
@@ -1058,8 +1098,11 @@ class TelegramController extends Controller
             $listings = array_values($listings);
         }
 
-        // Clean up previous messages to avoid cluttering the chat
-        $this->cleanOldMessages($chatId);
+        // Clean up the loading/filter message
+        $this->removeOldFilterMessage($chatId);
+
+        // Clean up only the previous control message to avoid duplicate pagination keyboards
+        $this->cleanOldControlMessage($chatId);
 
         $total = count($listings);
         $totalPages = ceil($total / 2);
@@ -1251,13 +1294,19 @@ class TelegramController extends Controller
                 'reply_markup' => json_encode(['inline_keyboard' => $controlButtons]),
                 'parse_mode' => 'HTML'
             ]);
-            $sentMessageIds[] = $this->getMessageIdFromResponse($response);
+            $controlMsgId = $this->getMessageIdFromResponse($response);
+            if ($controlMsgId) {
+                Cache::put('tg_control_msg_' . $chatId, $controlMsgId, 3600);
+                $sentMessageIds[] = $controlMsgId;
+            }
         } catch (\Exception $e) {
             Log::error("Failed to send control message: " . $e->getMessage());
         }
 
         // Cache the sent message IDs so we can delete them on next page or reset
-        Cache::put('tg_msg_' . $chatId, $sentMessageIds, 3600);
+        $existingMsgIds = Cache::get('tg_msg_' . $chatId, []);
+        $allMsgIds = array_merge($existingMsgIds, $sentMessageIds);
+        Cache::put('tg_msg_' . $chatId, $allMsgIds, 3600);
     }
 
     protected function cleanOldMessages($chatId)
@@ -1275,6 +1324,7 @@ class TelegramController extends Controller
             }
         }
         Cache::forget($key);
+        Cache::forget('tg_control_msg_' . $chatId);
     }
 
     protected function parseNumber($text)
@@ -1318,15 +1368,85 @@ class TelegramController extends Controller
 
     protected function sendMessageWithKeyboard($chatId, $text, $keyboard)
     {
+        if ($this->callbackMessageId) {
+            try {
+                Telegram::editMessageText([
+                    'chat_id' => $chatId,
+                    'message_id' => $this->callbackMessageId,
+                    'text' => $text,
+                    'reply_markup' => json_encode($keyboard),
+                    'parse_mode' => 'HTML'
+                ]);
+                Cache::put('tg_filter_msg_' . $chatId, $this->callbackMessageId, 3600);
+                return;
+            } catch (\Exception $e) {
+                Log::warning("Failed to edit message {$this->callbackMessageId}, sending new: " . $e->getMessage());
+            }
+        }
+
         try {
-            Telegram::sendMessage([
+            $response = Telegram::sendMessage([
                 'chat_id' => $chatId,
                 'text' => $text,
                 'reply_markup' => json_encode($keyboard),
                 'parse_mode' => 'HTML'
             ]);
+            $newMsgId = $this->getMessageIdFromResponse($response);
+            if ($newMsgId) {
+                Cache::put('tg_filter_msg_' . $chatId, $newMsgId, 3600);
+            }
         } catch (\Exception $e) {
             Log::error("Failed to send keyboard message: " . $e->getMessage());
+        }
+    }
+
+    protected function removeOldFilterKeyboard($chatId)
+    {
+        $oldFilterMsgId = Cache::get('tg_filter_msg_' . $chatId);
+        if ($oldFilterMsgId) {
+            try {
+                Telegram::editMessageReplyMarkup([
+                    'chat_id' => $chatId,
+                    'message_id' => $oldFilterMsgId,
+                    'reply_markup' => json_encode(['inline_keyboard' => []])
+                ]);
+            } catch (\Exception $e) {
+                // Ignore
+            }
+            Cache::forget('tg_filter_msg_' . $chatId);
+        }
+    }
+
+    protected function removeOldFilterMessage($chatId)
+    {
+        $oldFilterMsgId = Cache::get('tg_filter_msg_' . $chatId);
+        if ($oldFilterMsgId) {
+            try {
+                Telegram::deleteMessage([
+                    'chat_id' => $chatId,
+                    'message_id' => $oldFilterMsgId
+                ]);
+            } catch (\Exception $e) {
+                // Ignore
+            }
+            Cache::forget('tg_filter_msg_' . $chatId);
+        }
+    }
+
+    protected function cleanOldControlMessage($chatId)
+    {
+        $key = 'tg_control_msg_' . $chatId;
+        $msgId = Cache::get($key);
+        if ($msgId) {
+            try {
+                Telegram::deleteMessage([
+                    'chat_id' => $chatId,
+                    'message_id' => $msgId
+                ]);
+            } catch (\Exception $e) {
+                // Ignore
+            }
+            Cache::forget($key);
         }
     }
 
