@@ -46,32 +46,18 @@ def get_cbu_usd_rate():
         pass
     return 12600.0
 
-def fetch_secondary_source(category, region, district, price_min, price_max, currency, brand):
-    source_name = "Avto.uz" if category == 'mashina' else "Uybor.uz" if category in ['uy', 'office', 'dokon'] else "Lari.uz"
-    listings = []
-    
-    if category in ['uy', 'office', 'dokon']:
-        titles = [
-            f"Fevqulodda taklif! Evroremont qilingan shinam joy ({category.upper()})",
-            f"Barcha sharoitlari bilan ijaraga beriladigan {category} (yaxshi hududda)",
-            f"Zamonaviy dizayndagi {category} - Metroga juda yaqin masofada",
-        ]
-        descriptions = [
-            "Barcha qulayliklarga ega, keng xonalar, yangi mebel va texnika bilan jihozlangan. Internet, televizor, muzlatgich mavjud.",
-            "Yashash yoki ishlash uchun juda qulay joy. Tinch mahalla, atrofdagi infratuzilma rivojlangan. Qo'shimcha ma'lumot telefonda.",
-            "Evro remont, sifatli qurilish materiallaridan foydalanilgan. Istiqbolli joylashuv, avtoturargoh bor.",
-        ]
-        images_pool = [
-            ["https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=1000&q=80", "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1000&q=80"],
-            ["https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=1000&q=80", "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1000&q=80"],
-            ["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1000&q=80", "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1000&q=80"]
-        ]
-    elif category == 'mashina':
+def fetch_secondary_source(category, region, district, price_min, price_max, currency, brand, deal_type='ijara'):
+    if category not in ['uy', 'office', 'dokon']:
+        # If it's a car or telephone etc., we fall back to mock helper generator as before (to keep compatibility)
+        source_name = "Avto.uz" if category == 'mashina' else "Lari.uz"
+        listings = []
+        
         car_brand = brand if (brand and brand.lower() != 'all') else "Chevrolet"
+        deal_txt_uz = "ijaraga beriladi" if deal_type == 'ijara' else "sotiladi"
         titles = [
-            f"Ideal holatdagi {car_brand} sotiladi / ijaraga beriladi",
-            f"Kam haydalgan {car_brand} - Hech qanday xarajati yo'q, tayyor",
-            f"Yangi {car_brand} - Barcha opsiyalar va qo'shimcha jihozlar mavjud",
+            f"Ideal holatdagi {car_brand} {deal_txt_uz}",
+            f"Kam haydalgan {car_brand} - Hech qanday xarajati yo'q, tayyor ({deal_type.upper()})",
+            f"Yangi {car_brand} - Barcha opsiyalar va qo'shimcha jihozlar mavjud ({deal_type.upper()})",
         ]
         descriptions = [
             "Kraskasi toza, balonlari yangi, yurishi yumshoq. Mashina o'zimniki, kelishilgan holda beriladi.",
@@ -83,73 +69,201 @@ def fetch_secondary_source(category, region, district, price_min, price_max, cur
             ["https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1000&q=80", "https://images.unsplash.com/photo-1553440569-bcc63803a83d?auto=format&fit=crop&w=1000&q=80"],
             ["https://images.unsplash.com/photo-1583121274602-3e2820c69888?auto=format&fit=crop&w=1000&q=80", "https://images.unsplash.com/photo-1525609004556-c46c7d6cf0a3?auto=format&fit=crop&w=1000&q=80"]
         ]
-    else:
-        item_brand = brand if (brand and brand.lower() != 'all') else "Apple"
-        titles = [
-            f"Ideal holatda {item_brand} - Karobka-dokument to'liq",
-            f"Yangi yildagi aksiya! {item_brand} - Kafolat bilan sotiladi",
-            f"Sinfdagi eng yaxshisi {item_brand} - Aybi yo'q, ishlashi tez",
-        ]
-        descriptions = [
-            "Usta ko'rmagan, chizilgan joylari yo'q. Batareya sig'imi juda yaxshi. Real xaridorga chegirma bor.",
-            "Yangi salondan olingan, ochilmagan qadoqda. Kafolati mavjud, barcha aksessuarlari ichida.",
-            "Ishlashi zo'r, o'yin va o'qish uchun bemalol yetadi. Sotish sababi yangi model olish."
-        ]
-        images_pool = [
-            ["https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1000&q=80"],
-            ["https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=1000&q=80"],
-            ["https://images.unsplash.com/photo-1496181130204-755241544e35?auto=format&fit=crop&w=1000&q=80"]
-        ]
+        
+        multiplier = 1.4 if deal_type == 'sotuv' else 1.0
+        p_min = int(price_min) if price_min else 100
+        p_max = int(price_max) if price_max else 800
+        if p_max < p_min:
+            p_max = p_min * 2
+        step_price = (p_max - p_min) // 3
+        if step_price <= 0:
+            step_price = 100
+            
+        for i in range(3):
+            price_val = int((p_min + (i * step_price)) * multiplier)
+            formatted_price = f"{price_val:,} $" if currency == 'usd' else f"{price_val:,} UZS"
+            formatted_price = formatted_price.replace(',', ' ')
+            
+            listings.append({
+                'title': titles[i],
+                'url': f"https://www.{source_name.lower()}/listing/{100000 + i}",
+                'price': formatted_price,
+                'description': descriptions[i],
+                'location': f"{region.capitalize()}, Tuman {district or 'Markaz'}",
+                'images': images_pool[i % len(images_pool)],
+                'source': source_name
+            })
+        return listings
 
-    p_min = int(price_min) if price_min else (100 if currency == 'usd' else 1000000)
-    p_max = int(price_max) if price_max else (800 if currency == 'usd' else 8000000)
+    # Real Uybor.uz integration
+    listings = []
     
-    if p_max < p_min:
-        p_max = p_min * 2
+    categories_to_query = []
+    if category == 'uy':
+        categories_to_query = [7, 8]
+    elif category in ['office', 'dokon']:
+        categories_to_query = [10]
         
-    step_price = (p_max - p_min) // 3
-    if step_price <= 0:
-        step_price = 100
+    op_type = 'rent' if deal_type == 'ijara' else 'sale'
+    
+    UYBOR_REGION_MAP = {
+        'tashkent': 13,
+        'tashkent_region': 12,
+        'samarkand': 610196,
+        'buxoro': 610088,
+        'andijon': 610013,
+        'namangan': 610108,
+        'navoi': 610112,
+        'fergana': 610821
+    }
+    region_id = UYBOR_REGION_MAP.get(region.lower(), 13)
+    
+    UYBOR_DISTRICT_MAP = {
+        '12': 196, # Mirzo Ulugbek
+        '13': 204, # Mirabad
+        '18': 201, # Bektemir
+        '19': 206, # Sergeeli
+        '20': 199, # Almazar
+        '21': 203, # Uchtepa
+        '22': 200, # Yashnabad
+        '23': 202, # Chilanzar
+        '24': 198, # Shaykhantakhur
+        '25': 197, # Yunusabad
+        '26': 205  # Yakkasaray
+    }
+    uybor_district_id = UYBOR_DISTRICT_MAP.get(str(district)) if district else None
+    
+    url = "https://api.uybor.uz/api/v1/listings"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Origin': 'https://uybor.uz',
+        'Referer': 'https://uybor.uz/'
+    }
+    
+    for cat_id in categories_to_query:
+        params = {
+            'limit': 15,
+            'operationType__eq': op_type,
+            'category__eq': cat_id,
+            'region__eq': region_id,
+            'embed': 'category,subCategory,region,city,district,media'
+        }
         
-    for i in range(3):
-        price_val = p_min + (i * step_price)
-        formatted_price = f"{price_val:,} $" if currency == 'usd' else f"{price_val:,} UZS"
-        formatted_price = formatted_price.replace(',', ' ')
-        
-        listings.append({
-            'title': titles[i],
-            'url': f"https://www.{source_name.lower()}/listing/{100000 + i}",
-            'price': formatted_price,
-            'description': descriptions[i],
-            'location': f"{region.capitalize()}, Tuman {district or 'Markaz'}",
-            'images': images_pool[i % len(images_pool)],
-            'source': source_name
-        })
+        if uybor_district_id:
+            params['district__eq'] = uybor_district_id
+            
+        if category == 'office':
+            params['subCategory__eq'] = 12  # Office
+            
+        if price_min:
+            params['price__gte'] = int(price_min)
+        if price_max:
+            params['price__lte'] = int(price_max)
+            
+        if currency:
+            params['priceCurrency__eq'] = currency.lower()
+            
+        try:
+            res = requests.get(url, params=params, headers=headers, verify=True, timeout=10)
+            if res.status_code == 200:
+                data = res.json()
+                results = data.get('results', [])
+                for item in results:
+                    sub_name = item.get('subCategory', {}).get('name', {}).get('uz') or item.get('category', {}).get('name', {}).get('uz') or "Uy"
+                    rooms = item.get('room')
+                    square = item.get('square')
+                    
+                    title_parts = []
+                    if rooms:
+                        title_parts.append(f"{rooms}-xonali")
+                    title_parts.append(sub_name)
+                    title_str = " ".join(title_parts)
+                    if square:
+                        title_str += f", {square} m²"
+                        
+                    price_val = item.get('price')
+                    curr_val = str(item.get('priceCurrency') or '').upper()
+                    if curr_val == 'USD':
+                        curr_val = '$'
+                    formatted_price = f"{price_val:,} {curr_val}".replace(',', ' ')
+                    
+                    desc = item.get('description', '')
+                    desc = re.sub(r'<[^>]*>', '', desc)
+                    desc = desc.replace('&quot;', '"').replace('&amp;', '&').replace('&nbsp;', ' ').replace('<br />', '\n')
+                    
+                    loc_parts = []
+                    reg_name = item.get('region', {}).get('name', {}).get('uz')
+                    dist_name = item.get('district', {}).get('name', {}).get('uz')
+                    address = item.get('address')
+                    if reg_name:
+                        loc_parts.append(reg_name)
+                    if dist_name:
+                        loc_parts.append(dist_name)
+                    if address:
+                        loc_parts.append(address)
+                    location_str = ", ".join(loc_parts) if loc_parts else "Tashkent"
+                    
+                    images = []
+                    media_list = item.get('media', [])
+                    if isinstance(media_list, list):
+                        for media_item in media_list:
+                            img_url = media_item.get('url')
+                            if img_url:
+                                images.append(img_url)
+                                
+                    listing_id = item.get('id')
+                    detail_url = f"https://uybor.uz/ru/listings/{listing_id}"
+                    
+                    listings.append({
+                        'title': title_str,
+                        'url': detail_url,
+                        'price': formatted_price,
+                        'description': desc,
+                        'location': location_str,
+                        'images': images,
+                        'source': 'Uybor.uz'
+                    })
+        except Exception:
+            pass
         
     return listings
 
 def extract_json_state(html):
-    # 1. Try to find the quoted string assignment
-    match = re.search(r'window\.__PRERENDERED_STATE__\s*=\s*"(.*?)";', html, re.DOTALL)
-    if match:
+    # Find the start of the assignment
+    start_pos = html.find('window.__PRERENDERED_STATE__')
+    if start_pos == -1:
+        return None
+    
+    # Find the first '=' after it
+    eq_pos = html.find('=', start_pos)
+    if eq_pos == -1:
+        return None
+        
+    # Find the first non-whitespace char after '='
+    search_str = html[eq_pos+1:]
+    start_char_match = re.search(r'\S', search_str)
+    if not start_char_match:
+        return None
+        
+    start_char = start_char_match.group(0)
+    idx = eq_pos + 1 + start_char_match.start()
+    
+    if start_char == '"':
+        # Quoted string containing JSON. Let's extract the quoted string using json.JSONDecoder.
         try:
-            raw_str = match.group(0)
-            rhs = raw_str.split('=', 1)[1].strip().rstrip(';')
-            decoded_once = json.loads(rhs)
-            return json.loads(decoded_once)
+            decoded_str, _ = json.JSONDecoder().raw_decode(html[idx:])
+            return json.loads(decoded_str)
         except Exception as e:
             pass
-
-    # 2. Try the unquoted assignment fallback
-    match = re.search(r'window\.__PRERENDERED_STATE__\s*=\s*(\{.*?\});', html, re.DOTALL)
-    if not match:
-        match = re.search(r'window\.__PRERENDERED_STATE__\s*=\s*(\{.*?\})', html, re.DOTALL)
-    if match:
+    elif start_char == '{':
+        # Direct JSON object. Let's parse it using raw_decode.
         try:
-            return json.loads(match.group(1))
-        except:
+            decoded_obj, _ = json.JSONDecoder().raw_decode(html[idx:])
+            return decoded_obj
+        except Exception as e:
             pass
-
+            
     return None
 
 def find_listings_in_json(data):
@@ -238,6 +352,7 @@ def main():
     parser.add_argument('--fuel_type', default='', help='Fuel type filter (cars only)')
     parser.add_argument('--year_min', default='', help='Min year of manufacture (cars only)')
     parser.add_argument('--year_max', default='', help='Max year of manufacture (cars only)')
+    parser.add_argument('--deal_type', default='ijara', choices=['ijara', 'sotuv'], help='Deal type: rent (ijara) or sale (sotuv)')
     
     args = parser.parse_args()
     
@@ -248,24 +363,38 @@ def main():
     }
     region = region_map.get(args.region, args.region)
 
-    # 1. Determine base category URL
+    # 1. Determine base category URL and deal type query params
+    deal_type = args.deal_type
+    params = {}
+
     if args.category == 'uy':
-        base_url = f"https://www.olx.uz/nedvizhimost/kvartiry/arenda-dolgosrochnaya/{region}/"
+        if deal_type == 'sotuv':
+            base_url = f"https://www.olx.uz/nedvizhimost/kvartiry/prodazha/{region}/"
+        else:
+            base_url = f"https://www.olx.uz/nedvizhimost/kvartiry/arenda-dolgosrochnaya/{region}/"
     elif args.category in ['office', 'dokon']:
-        base_url = f"https://www.olx.uz/nedvizhimost/kommercheskie-pomeshcheniya/arenda/{region}/"
+        if deal_type == 'sotuv':
+            base_url = f"https://www.olx.uz/nedvizhimost/kommercheskie-pomeshcheniya/prodazha/{region}/"
+        else:
+            base_url = f"https://www.olx.uz/nedvizhimost/kommercheskie-pomeshcheniya/arenda/{region}/"
     elif args.category == 'telefon':
         base_url = f"https://www.olx.uz/elektronika/telefony/mobilnye-telefony/{region}/"
+        if deal_type == 'ijara':
+            params['q'] = 'arenda'
     elif args.category == 'kompyuter':
         base_url = f"https://www.olx.uz/elektronika/kompyutery/{region}/"
+        if deal_type == 'ijara':
+            params['q'] = 'arenda'
     elif args.category == 'mashina':
-        # Cars support brand in path: /legkovye-avtomobili/{brand}/{region}/
-        if args.brand and args.brand.lower() != 'all':
-            base_url = f"https://www.olx.uz/transport/legkovye-avtomobili/{args.brand.lower()}/{region}/"
+        if deal_type == 'ijara':
+            base_url = f"https://www.olx.uz/uslugi/prokat-arendaprodukt/arenda-transporta/{region}/"
         else:
-            base_url = f"https://www.olx.uz/transport/legkovye-avtomobili/{region}/"
+            if args.brand and args.brand.lower() != 'all':
+                base_url = f"https://www.olx.uz/transport/legkovye-avtomobili/{args.brand.lower()}/{region}/"
+            else:
+                base_url = f"https://www.olx.uz/transport/legkovye-avtomobili/{region}/"
         
-    # 2. Build query parameters
-    params = {}
+    # 2. Build query parameters (params dictionary is already initialized above)
     
     # Handle category mapping for commercial using OLX enum values:
     # 4 -> Offices, 1 -> Shops/boutiques
@@ -455,7 +584,8 @@ def main():
         try:
             sec_listings = fetch_secondary_source(
                 args.category, args.region, args.district,
-                args.price_min, args.price_max, args.currency, args.brand
+                args.price_min, args.price_max, args.currency, args.brand,
+                args.deal_type
             )
             for item in sec_listings:
                 item_url = item.get('url')

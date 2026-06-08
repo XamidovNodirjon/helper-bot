@@ -517,6 +517,126 @@
             pointer-events: none;
             z-index: 5;
         }
+
+        /* Image Lightbox/Popup Modal */
+        .image-popup-modal {
+            display: none;
+            position: fixed;
+            z-index: 10000;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(2, 6, 23, 0.95);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        .popup-close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 44px;
+            height: 44px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: white;
+            font-size: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10002;
+            transition: var(--transition-smooth);
+        }
+
+        .popup-close-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.05);
+        }
+
+        .popup-content-container {
+            position: relative;
+            max-width: 90%;
+            max-height: 80vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .popup-img {
+            max-width: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            transition: transform 0.2s ease;
+        }
+
+        .popup-nav-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 50px;
+            height: 50px;
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10001;
+            transition: var(--transition-smooth);
+            user-select: none;
+        }
+
+        .popup-nav-btn:hover {
+            background: rgba(15, 23, 42, 0.95);
+            border-color: #3b82f6;
+            transform: translateY(-50%) scale(1.08);
+        }
+
+        .popup-nav-btn.prev {
+            left: -25px;
+        }
+
+        .popup-nav-btn.next {
+            right: -25px;
+        }
+
+        @media (max-width: 600px) {
+            .popup-nav-btn {
+                width: 44px;
+                height: 44px;
+                font-size: 16px;
+            }
+            .popup-nav-btn.prev {
+                left: 10px;
+            }
+            .popup-nav-btn.next {
+                right: 10px;
+            }
+        }
+
+        .popup-indicator {
+            margin-top: 15px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
     </style>
 </head>
 <body>
@@ -612,8 +732,8 @@
                         @if(!empty($listing['images']) && count($listing['images']) > 0)
                             <div class="image-slider">
                                 @foreach($listing['images'] as $img)
-                                     <div class="slide">
-                                         <img src="{{ $img }}" alt="{{ $listing['title'] }}" loading="lazy">
+                                     <div class="slide" style="cursor: pointer;">
+                                         <img src="{{ $img }}" alt="{{ $listing['title'] }}" loading="lazy" onclick="openImagePopup({{ json_encode($listing['images']) }}, {{ $loop->index }}, event)">
                                      </div>
                                 @endforeach
                             </div>
@@ -949,6 +1069,91 @@
             const cards = Array.from(document.querySelectorAll('.listing-card') || []);
             updateAnalytics(cards);
         });
+
+        // ---------------- IMAGE POPUP GALLERY ----------------
+        let currentPopupImages = [];
+        let currentPopupIndex = 0;
+
+        function openImagePopup(images, index, event) {
+            if (event) {
+                event.stopPropagation();
+            }
+            if (!images || images.length === 0) return;
+            
+            currentPopupImages = images;
+            currentPopupIndex = index;
+            
+            const modal = document.getElementById('image-popup-modal');
+            updatePopupImage();
+            modal.style.display = 'flex';
+        }
+
+        function closeImagePopup() {
+            const modal = document.getElementById('image-popup-modal');
+            modal.style.display = 'none';
+        }
+
+        function updatePopupImage() {
+            const imgElement = document.getElementById('popup-img');
+            const indicatorElement = document.getElementById('popup-indicator');
+            
+            if (currentPopupImages.length > 0) {
+                imgElement.src = currentPopupImages[currentPopupIndex];
+                indicatorElement.textContent = `${currentPopupIndex + 1} / ${currentPopupImages.length}`;
+            }
+        }
+
+        function prevPopupImage(event) {
+            if (event) event.stopPropagation();
+            if (currentPopupImages.length <= 1) return;
+            
+            currentPopupIndex = (currentPopupIndex - 1 + currentPopupImages.length) % currentPopupImages.length;
+            updatePopupImage();
+        }
+
+        function nextPopupImage(event) {
+            if (event) event.stopPropagation();
+            if (currentPopupImages.length <= 1) return;
+            
+            currentPopupIndex = (currentPopupIndex + 1) % currentPopupImages.length;
+            updatePopupImage();
+        }
+
+        // Close on clicking outside the image container
+        document.addEventListener('DOMContentLoaded', () => {
+            const modal = document.getElementById('image-popup-modal');
+            if (modal) {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        closeImagePopup();
+                    }
+                });
+                
+                // Keyboard navigation
+                document.addEventListener('keydown', (e) => {
+                    if (modal.style.display === 'flex') {
+                        if (e.key === 'ArrowLeft') {
+                            prevPopupImage();
+                        } else if (e.key === 'ArrowRight') {
+                            nextPopupImage();
+                        } else if (e.key === 'Escape') {
+                            closeImagePopup();
+                        }
+                    }
+                });
+            }
+        });
     </script>
+
+    <!-- Image Popup Modal Markup -->
+    <div class="image-popup-modal" id="image-popup-modal">
+        <button class="popup-close-btn" onclick="closeImagePopup()">×</button>
+        <div class="popup-content-container">
+            <button class="popup-nav-btn prev" onclick="prevPopupImage(event)">‹</button>
+            <img src="" alt="Popup Image" class="popup-img" id="popup-img">
+            <button class="popup-nav-btn next" onclick="nextPopupImage(event)">›</button>
+        </div>
+        <div class="popup-indicator" id="popup-indicator">0 / 0</div>
+    </div>
 </body>
 </html>

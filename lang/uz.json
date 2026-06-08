@@ -69,5 +69,8 @@
   "unsubscribed_success": "🔕 Obuna bekor qilindi.",
   "subscription_notification_header": "🔔 <b>Siz obuna bo'lgan qidiruv bo'yicha YANGI E'LONLAR:</b>\n\n",
   "btn_change_language": "🌐 Tilni o'zgartirish",
-  "user_banned": "🚫 Kechirasiz, sizning hisobingiz admin tomonidan cheklangan. Qidiruv so'rovlarini yuborish imkoni yo'q."
+  "user_banned": "🚫 Kechirasiz, sizning hisobingiz admin tomonidan cheklangan. Qidiruv so'rovlarini yuborish imkoni yo'q.",
+  "select_deal_type": "<b>Turini tanlang:</b> 🔑\n\nIjara yoki sotuvdagilar uchun:",
+  "btn_ijara": "Ijara 🔑",
+  "btn_sotuv": "Sotuv 💰"
 }

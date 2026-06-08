@@ -151,7 +151,7 @@
                 </div>
                 <div class="panel-body" style="padding: 1.25rem;">
                     @php
-                        $hasFilters = $user->arenda_type || $user->region || $user->district || $user->brand || $user->price_min || $user->price_max;
+                        $hasFilters = $user->arenda_type || $user->deal_type || $user->region || $user->district || $user->brand || $user->price_min || $user->price_max;
                     @endphp
                     @if(!$hasFilters)
                         <p style="text-align: center; color: var(--text-muted); padding: 1rem 0;">Foydalanuvchi hali hech qanday qidiruv filterlarini tanlamagan.</p>
@@ -161,6 +161,12 @@
                                 <div class="filter-item">
                                     <span class="filter-label">Kategoriya:</span>
                                     <span class="filter-val" style="text-transform: capitalize;">{{ $user->arenda_type }}</span>
+                                </div>
+                            @endif
+                            @if($user->deal_type)
+                                <div class="filter-item">
+                                    <span class="filter-label">Turi:</span>
+                                    <span class="filter-val">{{ $user->deal_type === 'ijara' ? 'Ijara' : 'Sotuv' }}</span>
                                 </div>
                             @endif
                             @if($user->region)

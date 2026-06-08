@@ -89,6 +89,7 @@ class TelegramController extends Controller
                         $this->sendMessage($user->telegram_id, TranslationService::trans('profile_limit_reached', $user->language));
                     } else {
                         $filters = [
+                            'deal_type' => $user->deal_type,
                             'district' => $user->district,
                             'brand' => $user->brand,
                             'condition' => $user->condition,
@@ -317,7 +318,14 @@ class TelegramController extends Controller
         switch ($user->step) {
             case 'arenda_type':
                 if (in_array($data, ['uy', 'office', 'dokon', 'telefon', 'kompyuter', 'mashina'])) {
-                    $user->update(['arenda_type' => $data, 'step' => 'region']);
+                    $user->update(['arenda_type' => $data, 'step' => 'deal_type']);
+                    $this->sendStep($user);
+                }
+                break;
+
+            case 'deal_type':
+                if (in_array($data, ['ijara', 'sotuv'])) {
+                    $user->update(['deal_type' => $data, 'step' => 'region']);
                     $this->sendStep($user);
                 }
                 break;
@@ -482,6 +490,23 @@ class TelegramController extends Controller
                         [
                             ['text' => TranslationService::trans('btn_saved_searches', $user->language), 'callback_data' => 'saved_searches'],
                             ['text' => TranslationService::trans('btn_change_language', $user->language), 'callback_data' => 'change_language'],
+                        ]
+                    ]
+                ];
+                $this->sendMessageWithKeyboard($chatId, $text, $keyboard);
+                break;
+
+            case 'deal_type':
+                $text = TranslationService::trans('select_deal_type', $user->language);
+                $keyboard = [
+                    'inline_keyboard' => [
+                        [
+                            ['text' => TranslationService::trans('btn_ijara', $user->language), 'callback_data' => 'ijara'],
+                            ['text' => TranslationService::trans('btn_sotuv', $user->language), 'callback_data' => 'sotuv'],
+                        ],
+                        [
+                            ['text' => TranslationService::trans('btn_back', $user->language), 'callback_data' => 'back'],
+                            ['text' => TranslationService::trans('btn_restart', $user->language), 'callback_data' => 'restart']
                         ]
                     ]
                 ];
@@ -828,34 +853,7 @@ class TelegramController extends Controller
                 $currency = $user->price_currency === 'USD' ? 'USD' : 'UZS';
                 $text = TranslationService::trans('min_price', $user->language, ['currency' => $currency]);
                 
-                $buttons = [];
-                if ($currency === 'USD') {
-                    $buttons = [
-                        [
-                            ['text' => '100 $', 'callback_data' => '100'],
-                            ['text' => '200 $', 'callback_data' => '200'],
-                            ['text' => '300 $', 'callback_data' => '300'],
-                        ],
-                        [
-                            ['text' => '500 $', 'callback_data' => '500'],
-                            ['text' => '700 $', 'callback_data' => '700'],
-                            ['text' => '1000 $', 'callback_data' => '1000'],
-                        ]
-                    ];
-                } else {
-                    $buttons = [
-                        [
-                            ['text' => '1 mln UZS', 'callback_data' => '1000000'],
-                            ['text' => '2 mln UZS', 'callback_data' => '2000000'],
-                            ['text' => '3 mln UZS', 'callback_data' => '3000000'],
-                        ],
-                        [
-                            ['text' => '4 mln UZS', 'callback_data' => '4000000'],
-                            ['text' => '5 mln UZS', 'callback_data' => '5000000'],
-                            ['text' => '10 mln UZS', 'callback_data' => '10000000'],
-                        ]
-                    ];
-                }
+                $buttons = $this->getPriceMinButtons($user);
                 $buttons[] = [['text' => TranslationService::trans('btn_skip', $user->language), 'callback_data' => 'skip']];
                 $buttons[] = [
                     ['text' => TranslationService::trans('btn_back', $user->language), 'callback_data' => 'back'],
@@ -870,34 +868,7 @@ class TelegramController extends Controller
                 $currency = $user->price_currency === 'USD' ? 'USD' : 'UZS';
                 $text = TranslationService::trans('max_price', $user->language, ['currency' => $currency]);
                 
-                $buttons = [];
-                if ($currency === 'USD') {
-                    $buttons = [
-                        [
-                            ['text' => '300 $', 'callback_data' => '300'],
-                            ['text' => '500 $', 'callback_data' => '500'],
-                            ['text' => '700 $', 'callback_data' => '700'],
-                        ],
-                        [
-                            ['text' => '1000 $', 'callback_data' => '1000'],
-                            ['text' => '1500 $', 'callback_data' => '1500'],
-                            ['text' => '2000 $', 'callback_data' => '2000'],
-                        ]
-                    ];
-                } else {
-                    $buttons = [
-                        [
-                            ['text' => '3 mln UZS', 'callback_data' => '3000000'],
-                            ['text' => '5 mln UZS', 'callback_data' => '5000000'],
-                            ['text' => '8 mln UZS', 'callback_data' => '8000000'],
-                        ],
-                        [
-                            ['text' => '10 mln UZS', 'callback_data' => '10000000'],
-                            ['text' => '15 mln UZS', 'callback_data' => '15000000'],
-                            ['text' => '20 mln UZS', 'callback_data' => '20000000'],
-                        ]
-                    ];
-                }
+                $buttons = $this->getPriceMaxButtons($user);
                 $buttons[] = [['text' => TranslationService::trans('btn_skip', $user->language), 'callback_data' => 'skip']];
                 $buttons[] = [
                     ['text' => TranslationService::trans('btn_back', $user->language), 'callback_data' => 'back'],
@@ -982,7 +953,7 @@ class TelegramController extends Controller
 
     protected function runScraperAndShow($user)
     {
-        $queryDetails = "Category: {$user->arenda_type}, Region: {$user->region}";
+        $queryDetails = "Category: {$user->arenda_type}, DealType: {$user->deal_type}, Region: {$user->region}";
         if ($user->district) $queryDetails .= ", District: {$user->district}";
         if ($user->price_min || $user->price_max) $queryDetails .= ", Price: {$user->price_min}-{$user->price_max} {$user->price_currency}";
         if ($user->brand) $queryDetails .= ", Brand: {$user->brand}";
@@ -993,11 +964,12 @@ class TelegramController extends Controller
         $scriptPath = base_path('app/Services/olx_scraper.py');
         
         $cmd = sprintf(
-            '%s %s --category=%s --region=%s',
+            '%s %s --category=%s --region=%s --deal_type=%s',
             escapeshellcmd($pythonPath),
             escapeshellarg($scriptPath),
             escapeshellarg($user->arenda_type),
-            escapeshellarg($user->region)
+            escapeshellarg($user->region),
+            escapeshellarg($user->deal_type ?: 'ijara')
         );
 
         if ($user->district) {
@@ -1496,8 +1468,10 @@ class TelegramController extends Controller
         switch ($user->step) {
             case 'arenda_type':
                 return 'select_language';
-            case 'region':
+            case 'deal_type':
                 return 'arenda_type';
+            case 'region':
+                return 'deal_type';
             case 'district':
                 return 'region';
             case 'brand':
@@ -1539,6 +1513,598 @@ class TelegramController extends Controller
         $user = TelegramUser::where('telegram_id', $telegramId)->first();
         $listings = $user ? ($user->last_results ?? []) : [];
         return view('webapp', compact('listings'));
+    }
+
+    protected function getPriceMinButtons($user)
+    {
+        $currency = $user->price_currency === 'USD' ? 'USD' : 'UZS';
+        $category = $user->arenda_type;
+        $isSale = ($user->deal_type === 'sotuv');
+
+        if ($currency === 'USD') {
+            if ($category === 'uy') {
+                if ($isSale) {
+                    return [
+                        [
+                            ['text' => '30 000 $', 'callback_data' => '30000'],
+                            ['text' => '50 000 $', 'callback_data' => '50000'],
+                            ['text' => '80 000 $', 'callback_data' => '80000'],
+                        ],
+                        [
+                            ['text' => '100 000 $', 'callback_data' => '100000'],
+                            ['text' => '150 000 $', 'callback_data' => '150000'],
+                            ['text' => '200 000 $', 'callback_data' => '200000'],
+                        ],
+                        [
+                            ['text' => '300 000 $', 'callback_data' => '300000'],
+                        ]
+                    ];
+                } else {
+                    return [
+                        [
+                            ['text' => '100 $', 'callback_data' => '100'],
+                            ['text' => '200 $', 'callback_data' => '200'],
+                            ['text' => '300 $', 'callback_data' => '300'],
+                        ],
+                        [
+                            ['text' => '500 $', 'callback_data' => '500'],
+                            ['text' => '700 $', 'callback_data' => '700'],
+                            ['text' => '1000 $', 'callback_data' => '1000'],
+                        ]
+                    ];
+                }
+            } elseif (in_array($category, ['office', 'dokon'])) {
+                if ($isSale) {
+                    return [
+                        [
+                            ['text' => '50 000 $', 'callback_data' => '50000'],
+                            ['text' => '100 000 $', 'callback_data' => '100000'],
+                            ['text' => '150 000 $', 'callback_data' => '150000'],
+                        ],
+                        [
+                            ['text' => '200 000 $', 'callback_data' => '200000'],
+                            ['text' => '300 000 $', 'callback_data' => '300000'],
+                            ['text' => '500 000 $', 'callback_data' => '500000'],
+                        ]
+                    ];
+                } else {
+                    return [
+                        [
+                            ['text' => '100 $', 'callback_data' => '100'],
+                            ['text' => '200 $', 'callback_data' => '200'],
+                            ['text' => '300 $', 'callback_data' => '300'],
+                        ],
+                        [
+                            ['text' => '500 $', 'callback_data' => '500'],
+                            ['text' => '700 $', 'callback_data' => '700'],
+                            ['text' => '1000 $', 'callback_data' => '1000'],
+                        ]
+                    ];
+                }
+            } elseif ($category === 'mashina') {
+                if ($isSale) {
+                    return [
+                        [
+                            ['text' => '10 000 $', 'callback_data' => '10000'],
+                            ['text' => '15 000 $', 'callback_data' => '15000'],
+                            ['text' => '20 000 $', 'callback_data' => '20000'],
+                        ],
+                        [
+                            ['text' => '30 000 $', 'callback_data' => '30000'],
+                            ['text' => '45 000 $', 'callback_data' => '45000'],
+                            ['text' => '60 000 $', 'callback_data' => '60000'],
+                        ]
+                    ];
+                } else {
+                    return [
+                        [
+                            ['text' => '200 $', 'callback_data' => '200'],
+                            ['text' => '300 $', 'callback_data' => '300'],
+                            ['text' => '400 $', 'callback_data' => '400'],
+                        ],
+                        [
+                            ['text' => '500 $', 'callback_data' => '500'],
+                            ['text' => '700 $', 'callback_data' => '700'],
+                            ['text' => '1000 $', 'callback_data' => '1000'],
+                        ]
+                    ];
+                }
+            } elseif ($category === 'telefon') {
+                if ($isSale) {
+                    return [
+                        [
+                            ['text' => '200 $', 'callback_data' => '200'],
+                            ['text' => '400 $', 'callback_data' => '400'],
+                            ['text' => '600 $', 'callback_data' => '600'],
+                        ],
+                        [
+                            ['text' => '800 $', 'callback_data' => '800'],
+                            ['text' => '1000 $', 'callback_data' => '1000'],
+                            ['text' => '1200 $', 'callback_data' => '1200'],
+                        ]
+                    ];
+                } else {
+                    return [
+                        [
+                            ['text' => '5 $', 'callback_data' => '5'],
+                            ['text' => '10 $', 'callback_data' => '10'],
+                            ['text' => '20 $', 'callback_data' => '20'],
+                        ],
+                        [
+                            ['text' => '30 $', 'callback_data' => '30'],
+                            ['text' => '50 $', 'callback_data' => '50'],
+                            ['text' => '100 $', 'callback_data' => '100'],
+                        ]
+                    ];
+                }
+            } else { // kompyuter and others
+                if ($isSale) {
+                    return [
+                        [
+                            ['text' => '300 $', 'callback_data' => '300'],
+                            ['text' => '500 $', 'callback_data' => '500'],
+                            ['text' => '800 $', 'callback_data' => '800'],
+                        ],
+                        [
+                            ['text' => '1200 $', 'callback_data' => '1200'],
+                            ['text' => '1800 $', 'callback_data' => '1800'],
+                            ['text' => '2500 $', 'callback_data' => '2500'],
+                        ]
+                    ];
+                } else {
+                    return [
+                        [
+                            ['text' => '5 $', 'callback_data' => '5'],
+                            ['text' => '10 $', 'callback_data' => '10'],
+                            ['text' => '20 $', 'callback_data' => '20'],
+                        ],
+                        [
+                            ['text' => '30 $', 'callback_data' => '30'],
+                            ['text' => '50 $', 'callback_data' => '50'],
+                            ['text' => '100 $', 'callback_data' => '100'],
+                        ]
+                    ];
+                }
+            }
+        } else { // UZS
+            if ($category === 'uy') {
+                if ($isSale) {
+                    return [
+                        [
+                            ['text' => '350 mln UZS', 'callback_data' => '350000000'],
+                            ['text' => '600 mln UZS', 'callback_data' => '600000000'],
+                            ['text' => '1 mlrd UZS', 'callback_data' => '1000000000'],
+                        ],
+                        [
+                            ['text' => '1.5 mlrd UZS', 'callback_data' => '1500000000'],
+                            ['text' => '2 mlrd UZS', 'callback_data' => '2000000000'],
+                            ['text' => '3 mlrd UZS', 'callback_data' => '3000000000'],
+                        ]
+                    ];
+                } else {
+                    return [
+                        [
+                            ['text' => '1 mln UZS', 'callback_data' => '1000000'],
+                            ['text' => '2 mln UZS', 'callback_data' => '2000000'],
+                            ['text' => '3 mln UZS', 'callback_data' => '3000000'],
+                        ],
+                        [
+                            ['text' => '4 mln UZS', 'callback_data' => '4000000'],
+                            ['text' => '5 mln UZS', 'callback_data' => '5000000'],
+                            ['text' => '10 mln UZS', 'callback_data' => '10000000'],
+                        ]
+                    ];
+                }
+            } elseif (in_array($category, ['office', 'dokon'])) {
+                if ($isSale) {
+                    return [
+                        [
+                            ['text' => '600 mln UZS', 'callback_data' => '600000000'],
+                            ['text' => '1 mlrd UZS', 'callback_data' => '1000000000'],
+                            ['text' => '2 mlrd UZS', 'callback_data' => '2000000000'],
+                        ],
+                        [
+                            ['text' => '3 mlrd UZS', 'callback_data' => '3000000000'],
+                            ['text' => '5 mlrd UZS', 'callback_data' => '5000000000'],
+                            ['text' => '8 mlrd UZS', 'callback_data' => '8000000000'],
+                        ]
+                    ];
+                } else {
+                    return [
+                        [
+                            ['text' => '1 mln UZS', 'callback_data' => '1000000'],
+                            ['text' => '2 mln UZS', 'callback_data' => '2000000'],
+                            ['text' => '3 mln UZS', 'callback_data' => '3000000'],
+                        ],
+                        [
+                            ['text' => '4 mln UZS', 'callback_data' => '4000000'],
+                            ['text' => '5 mln UZS', 'callback_data' => '5000000'],
+                            ['text' => '10 mln UZS', 'callback_data' => '10000000'],
+                        ]
+                    ];
+                }
+            } elseif ($category === 'mashina') {
+                if ($isSale) {
+                    return [
+                        [
+                            ['text' => '120 mln UZS', 'callback_data' => '120000000'],
+                            ['text' => '180 mln UZS', 'callback_data' => '180000000'],
+                            ['text' => '250 mln UZS', 'callback_data' => '250000000'],
+                        ],
+                        [
+                            ['text' => '350 mln UZS', 'callback_data' => '350000000'],
+                            ['text' => '500 mln UZS', 'callback_data' => '500000000'],
+                            ['text' => '750 mln UZS', 'callback_data' => '750000000'],
+                        ]
+                    ];
+                } else {
+                    return [
+                        [
+                            ['text' => '2 mln UZS', 'callback_data' => '2000000'],
+                            ['text' => '3 mln UZS', 'callback_data' => '3000000'],
+                            ['text' => '4 mln UZS', 'callback_data' => '4000000'],
+                        ],
+                        [
+                            ['text' => '5 mln UZS', 'callback_data' => '5000000'],
+                            ['text' => '7 mln UZS', 'callback_data' => '7000000'],
+                            ['text' => '10 mln UZS', 'callback_data' => '10000000'],
+                        ]
+                    ];
+                }
+            } elseif ($category === 'telefon') {
+                if ($isSale) {
+                    return [
+                        [
+                            ['text' => '2.5 mln UZS', 'callback_data' => '2500000'],
+                            ['text' => '5 mln UZS', 'callback_data' => '5000000'],
+                            ['text' => '7.5 mln UZS', 'callback_data' => '7500000'],
+                        ],
+                        [
+                            ['text' => '10 mln UZS', 'callback_data' => '10000000'],
+                            ['text' => '12.5 mln UZS', 'callback_data' => '12500000'],
+                            ['text' => '15 mln UZS', 'callback_data' => '15000000'],
+                        ]
+                    ];
+                } else {
+                    return [
+                        [
+                            ['text' => '50k UZS', 'callback_data' => '50000'],
+                            ['text' => '100k UZS', 'callback_data' => '100000'],
+                            ['text' => '200k UZS', 'callback_data' => '200000'],
+                        ],
+                        [
+                            ['text' => '300k UZS', 'callback_data' => '300000'],
+                            ['text' => '500k UZS', 'callback_data' => '500000'],
+                            ['text' => '1 mln UZS', 'callback_data' => '1000000'],
+                        ]
+                    ];
+                }
+            } else { // kompyuter and others
+                if ($isSale) {
+                    return [
+                        [
+                            ['text' => '4 mln UZS', 'callback_data' => '4000000'],
+                            ['text' => '6 mln UZS', 'callback_data' => '6000000'],
+                            ['text' => '10 mln UZS', 'callback_data' => '10000000'],
+                        ],
+                        [
+                            ['text' => '15 mln UZS', 'callback_data' => '15000000'],
+                            ['text' => '22 mln UZS', 'callback_data' => '22000000'],
+                            ['text' => '30 mln UZS', 'callback_data' => '30000000'],
+                        ]
+                    ];
+                } else {
+                    return [
+                        [
+                            ['text' => '50k UZS', 'callback_data' => '50000'],
+                            ['text' => '100k UZS', 'callback_data' => '100000'],
+                            ['text' => '200k UZS', 'callback_data' => '200000'],
+                        ],
+                        [
+                            ['text' => '300k UZS', 'callback_data' => '300000'],
+                            ['text' => '500k UZS', 'callback_data' => '500000'],
+                            ['text' => '1 mln UZS', 'callback_data' => '1000000'],
+                        ]
+                    ];
+                }
+            }
+        }
+    }
+
+    protected function getPriceMaxButtons($user)
+    {
+        $currency = $user->price_currency === 'USD' ? 'USD' : 'UZS';
+        $category = $user->arenda_type;
+        $isSale = ($user->deal_type === 'sotuv');
+
+        if ($currency === 'USD') {
+            if ($category === 'uy') {
+                if ($isSale) {
+                    return [
+                        [
+                            ['text' => '80 000 $', 'callback_data' => '80000'],
+                            ['text' => '100 000 $', 'callback_data' => '100000'],
+                            ['text' => '120 000 $', 'callback_data' => '120000'],
+                        ],
+                        [
+                            ['text' => '150 000 $', 'callback_data' => '150000'],
+                            ['text' => '200 000 $', 'callback_data' => '200000'],
+                            ['text' => '300 000 $', 'callback_data' => '300000'],
+                        ],
+                        [
+                            ['text' => '500 000 $', 'callback_data' => '500000'],
+                        ]
+                    ];
+                } else {
+                    return [
+                        [
+                            ['text' => '300 $', 'callback_data' => '300'],
+                            ['text' => '500 $', 'callback_data' => '500'],
+                            ['text' => '700 $', 'callback_data' => '700'],
+                        ],
+                        [
+                            ['text' => '1000 $', 'callback_data' => '1000'],
+                            ['text' => '1500 $', 'callback_data' => '1500'],
+                            ['text' => '2000 $', 'callback_data' => '2000'],
+                        ]
+                    ];
+                }
+            } elseif (in_array($category, ['office', 'dokon'])) {
+                if ($isSale) {
+                    return [
+                        [
+                            ['text' => '100 000 $', 'callback_data' => '100000'],
+                            ['text' => '150 000 $', 'callback_data' => '150000'],
+                            ['text' => '200 000 $', 'callback_data' => '200000'],
+                        ],
+                        [
+                            ['text' => '300 000 $', 'callback_data' => '300000'],
+                            ['text' => '500 000 $', 'callback_data' => '500000'],
+                            ['text' => '1 000 000 $', 'callback_data' => '1000000'],
+                        ]
+                    ];
+                } else {
+                    return [
+                        [
+                            ['text' => '300 $', 'callback_data' => '300'],
+                            ['text' => '500 $', 'callback_data' => '500'],
+                            ['text' => '700 $', 'callback_data' => '700'],
+                        ],
+                        [
+                            ['text' => '1000 $', 'callback_data' => '1000'],
+                            ['text' => '1500 $', 'callback_data' => '1500'],
+                            ['text' => '2000 $', 'callback_data' => '2000'],
+                        ]
+                    ];
+                }
+            } elseif ($category === 'mashina') {
+                if ($isSale) {
+                    return [
+                        [
+                            ['text' => '15 000 $', 'callback_data' => '15000'],
+                            ['text' => '20 000 $', 'callback_data' => '20000'],
+                            ['text' => '30 000 $', 'callback_data' => '30000'],
+                        ],
+                        [
+                            ['text' => '45 000 $', 'callback_data' => '45000'],
+                            ['text' => '60 000 $', 'callback_data' => '60000'],
+                            ['text' => '100 000 $', 'callback_data' => '100000'],
+                        ]
+                    ];
+                } else {
+                    return [
+                        [
+                            ['text' => '400 $', 'callback_data' => '400'],
+                            ['text' => '600 $', 'callback_data' => '600'],
+                            ['text' => '800 $', 'callback_data' => '800'],
+                        ],
+                        [
+                            ['text' => '1000 $', 'callback_data' => '1000'],
+                            ['text' => '1500 $', 'callback_data' => '1500'],
+                            ['text' => '2000 $', 'callback_data' => '2000'],
+                        ]
+                    ];
+                }
+            } elseif ($category === 'telefon') {
+                if ($isSale) {
+                    return [
+                        [
+                            ['text' => '400 $', 'callback_data' => '400'],
+                            ['text' => '600 $', 'callback_data' => '600'],
+                            ['text' => '800 $', 'callback_data' => '800'],
+                        ],
+                        [
+                            ['text' => '1000 $', 'callback_data' => '1000'],
+                            ['text' => '1200 $', 'callback_data' => '1200'],
+                            ['text' => '1500 $', 'callback_data' => '1500'],
+                        ]
+                    ];
+                } else {
+                    return [
+                        [
+                            ['text' => '20 $', 'callback_data' => '20'],
+                            ['text' => '30 $', 'callback_data' => '30'],
+                            ['text' => '50 $', 'callback_data' => '50'],
+                        ],
+                        [
+                            ['text' => '100 $', 'callback_data' => '100'],
+                            ['text' => '150 $', 'callback_data' => '150'],
+                            ['text' => '200 $', 'callback_data' => '200'],
+                        ]
+                    ];
+                }
+            } else { // kompyuter and others
+                if ($isSale) {
+                    return [
+                        [
+                            ['text' => '500 $', 'callback_data' => '500'],
+                            ['text' => '800 $', 'callback_data' => '800'],
+                            ['text' => '1200 $', 'callback_data' => '1200'],
+                        ],
+                        [
+                            ['text' => '1800 $', 'callback_data' => '1800'],
+                            ['text' => '2500 $', 'callback_data' => '2500'],
+                            ['text' => '4000 $', 'callback_data' => '4000'],
+                        ]
+                    ];
+                } else {
+                    return [
+                        [
+                            ['text' => '20 $', 'callback_data' => '20'],
+                            ['text' => '30 $', 'callback_data' => '30'],
+                            ['text' => '50 $', 'callback_data' => '50'],
+                        ],
+                        [
+                            ['text' => '100 $', 'callback_data' => '100'],
+                            ['text' => '150 $', 'callback_data' => '150'],
+                            ['text' => '200 $', 'callback_data' => '200'],
+                        ]
+                    ];
+                }
+            }
+        } else { // UZS
+            if ($category === 'uy') {
+                if ($isSale) {
+                    return [
+                        [
+                            ['text' => '1 mlrd UZS', 'callback_data' => '1000000000'],
+                            ['text' => '1.5 mlrd UZS', 'callback_data' => '1500000000'],
+                            ['text' => '2 mlrd UZS', 'callback_data' => '2000000000'],
+                        ],
+                        [
+                            ['text' => '3 mlrd UZS', 'callback_data' => '3000000000'],
+                            ['text' => '4 mlrd UZS', 'callback_data' => '4000000000'],
+                            ['text' => '6 mlrd UZS', 'callback_data' => '6000000000'],
+                        ]
+                    ];
+                } else {
+                    return [
+                        [
+                            ['text' => '3 mln UZS', 'callback_data' => '3000000'],
+                            ['text' => '5 mln UZS', 'callback_data' => '5000000'],
+                            ['text' => '8 mln UZS', 'callback_data' => '8000000'],
+                        ],
+                        [
+                            ['text' => '10 mln UZS', 'callback_data' => '10000000'],
+                            ['text' => '15 mln UZS', 'callback_data' => '15000000'],
+                            ['text' => '20 mln UZS', 'callback_data' => '20000000'],
+                        ]
+                    ];
+                }
+            } elseif (in_array($category, ['office', 'dokon'])) {
+                if ($isSale) {
+                    return [
+                        [
+                            ['text' => '1 mlrd UZS', 'callback_data' => '1000000000'],
+                            ['text' => '2 mlrd UZS', 'callback_data' => '2000000000'],
+                            ['text' => '3 mlrd UZS', 'callback_data' => '3000000000'],
+                        ],
+                        [
+                            ['text' => '5 mlrd UZS', 'callback_data' => '5000000000'],
+                            ['text' => '8 mlrd UZS', 'callback_data' => '8000000000'],
+                            ['text' => '12 mlrd UZS', 'callback_data' => '12000000000'],
+                        ]
+                    ];
+                } else {
+                    return [
+                        [
+                            ['text' => '3 mln UZS', 'callback_data' => '3000000'],
+                            ['text' => '5 mln UZS', 'callback_data' => '5000000'],
+                            ['text' => '8 mln UZS', 'callback_data' => '8000000'],
+                        ],
+                        [
+                            ['text' => '10 mln UZS', 'callback_data' => '10000000'],
+                            ['text' => '15 mln UZS', 'callback_data' => '15000000'],
+                            ['text' => '20 mln UZS', 'callback_data' => '20000000'],
+                        ]
+                    ];
+                }
+            } elseif ($category === 'mashina') {
+                if ($isSale) {
+                    return [
+                        [
+                            ['text' => '180 mln UZS', 'callback_data' => '180000000'],
+                            ['text' => '250 mln UZS', 'callback_data' => '250000000'],
+                            ['text' => '350 mln UZS', 'callback_data' => '350000000'],
+                        ],
+                        [
+                            ['text' => '500 mln UZS', 'callback_data' => '500000000'],
+                            ['text' => '750 mln UZS', 'callback_data' => '750000000'],
+                            ['text' => '1.2 mlrd UZS', 'callback_data' => '1200000000'],
+                        ]
+                    ];
+                } else {
+                    return [
+                        [
+                            ['text' => '4 mln UZS', 'callback_data' => '4000000'],
+                            ['text' => '6 mln UZS', 'callback_data' => '6000000'],
+                            ['text' => '8 mln UZS', 'callback_data' => '8000000'],
+                        ],
+                        [
+                            ['text' => '10 mln UZS', 'callback_data' => '10000000'],
+                            ['text' => '15 mln UZS', 'callback_data' => '15000000'],
+                            ['text' => '20 mln UZS', 'callback_data' => '20000000'],
+                        ]
+                    ];
+                }
+            } elseif ($category === 'telefon') {
+                if ($isSale) {
+                    return [
+                        [
+                            ['text' => '5 mln UZS', 'callback_data' => '5000000'],
+                            ['text' => '7.5 mln UZS', 'callback_data' => '7500000'],
+                            ['text' => '10 mln UZS', 'callback_data' => '10000000'],
+                        ],
+                        [
+                            ['text' => '12.5 mln UZS', 'callback_data' => '12500000'],
+                            ['text' => '15 mln UZS', 'callback_data' => '15000000'],
+                            ['text' => '20 mln UZS', 'callback_data' => '20000000'],
+                        ]
+                    ];
+                } else {
+                    return [
+                        [
+                            ['text' => '100k UZS', 'callback_data' => '100000'],
+                            ['text' => '200k UZS', 'callback_data' => '200000'],
+                            ['text' => '300k UZS', 'callback_data' => '300000'],
+                        ],
+                        [
+                            ['text' => '500k UZS', 'callback_data' => '500000'],
+                            ['text' => '1 mln UZS', 'callback_data' => '1000000'],
+                            ['text' => '2 mln UZS', 'callback_data' => '2000000'],
+                        ]
+                    ];
+                }
+            } else { // kompyuter and others
+                if ($isSale) {
+                    return [
+                        [
+                            ['text' => '6 mln UZS', 'callback_data' => '6000000'],
+                            ['text' => '10 mln UZS', 'callback_data' => '10000000'],
+                            ['text' => '15 mln UZS', 'callback_data' => '15000000'],
+                        ],
+                        [
+                            ['text' => '22 mln UZS', 'callback_data' => '22000000'],
+                            ['text' => '30 mln UZS', 'callback_data' => '30000000'],
+                            ['text' => '50 mln UZS', 'callback_data' => '50000000'],
+                        ]
+                    ];
+                } else {
+                    return [
+                        [
+                            ['text' => '100k UZS', 'callback_data' => '100000'],
+                            ['text' => '200k UZS', 'callback_data' => '200000'],
+                            ['text' => '300k UZS', 'callback_data' => '300000'],
+                        ],
+                        [
+                            ['text' => '500k UZS', 'callback_data' => '500000'],
+                            ['text' => '1 mln UZS', 'callback_data' => '1000000'],
+                            ['text' => '2 mln UZS', 'callback_data' => '2000000'],
+                        ]
+                    ];
+                }
+            }
+        }
     }
 
     protected function logAction($user, $action, $details = null)

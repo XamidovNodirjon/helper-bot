@@ -12,6 +12,7 @@ class TelegramUser extends Model
         'language',
         'step',
         'arenda_type',
+        'deal_type',
         'region',
         'district',
         'brand',
@@ -45,6 +46,7 @@ class TelegramUser extends Model
         $this->update([
             'step' => 'arenda_type',
             'arenda_type' => null,
+            'deal_type' => null,
             'region' => null,
             'district' => null,
             'brand' => null,
