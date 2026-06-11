@@ -322,6 +322,7 @@ class TelegramController extends Controller
                     $this->sendStep($user);
                 }
                 break;
+                
 
             case 'deal_type':
                 if (in_array($data, ['ijara', 'sotuv'])) {
